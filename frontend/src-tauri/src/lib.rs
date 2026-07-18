@@ -44,6 +44,7 @@ pub mod database;
 pub mod notifications;
 pub mod ollama;
 pub mod onboarding;
+pub mod paths;
 pub mod openai;
 pub mod anthropic;
 pub mod groq;

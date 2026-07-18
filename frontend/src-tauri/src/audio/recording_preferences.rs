@@ -39,8 +39,15 @@ impl Default for RecordingPreferences {
     }
 }
 
-/// Get the default recordings folder based on platform
+/// Get the default recordings folder based on platform.
+///
+/// In portable mode (see [`crate::paths::portable_root`]) recordings
+/// are stored inside the portable data directory to keep everything
+/// self-contained on removable media.
 pub fn get_default_recordings_folder() -> PathBuf {
+    if let Some(root) = crate::paths::portable_root() {
+        return root.join("recordings");
+    }
     #[cfg(target_os = "windows")]
     {
         // Windows: %USERPROFILE%\Music\meetily-recordings
