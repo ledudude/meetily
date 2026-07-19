@@ -328,6 +328,43 @@ export function DownloadProgressStep() {
     }
   };
 
+  // Skip all downloads and enter offline mode.
+  // Marks onboarding as completed without configuring any local provider
+  // so the user can start the app and pick models later from Settings.
+  const handleSkipDownloads = async () => {
+    if (isCompleting) return;
+    setIsCompleting(true);
+    try {
+      await invoke('save_onboarding_status_cmd', {
+        status: {
+          version: '1.0',
+          completed: true,
+          current_step: isMac ? 4 : 3,
+          model_status: {
+            parakeet: parakeetDownloaded ? 'downloaded' : 'not_downloaded',
+            summary: summaryModelDownloaded ? 'downloaded' : 'not_downloaded',
+            selected_summary_model: selectedSummaryModel || undefined,
+          },
+          last_updated: new Date().toISOString(),
+        },
+      });
+
+      toast.info('Skipped model downloads', {
+        description: 'You can download Transcription/Summary engines later from Settings.',
+        duration: 5000,
+      });
+
+      // Small delay to ensure state is persisted before reload
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      window.location.reload();
+    } catch (error) {
+      console.error('[DownloadProgressStep] Failed to skip downloads:', error);
+      toast.error('Failed to skip downloads', {
+        description: 'Please try again or complete the downloads to continue.',
+      });
+      setIsCompleting(false);
+    }
+  };
   const handleContinue = async () => {
     // Verify actual model availability (catches state drift)
     try {
@@ -533,6 +570,18 @@ export function DownloadProgressStep() {
               'Continue'
             )}
           </Button>
+
+          {/* Skip for now (offline mode) - allows first-run without any downloads */}
+          {!(parakeetDownloaded && summaryModelDownloaded) && (
+            <button
+              type="button"
+              onClick={handleSkipDownloads}
+              disabled={isCompleting}
+              className="mt-3 w-full text-sm text-gray-500 hover:text-gray-800 underline underline-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Skip for now (offline mode)
+            </button>
+          )}
         </div>
       </div>
     </OnboardingContainer>
