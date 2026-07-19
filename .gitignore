@@ -77,3 +77,105 @@ experiments/
 target/
 
 frontend/src-tauri/binaries/
+
+# ===== Codex 兜底合并（首次进入协议追加，仅缺失项） =====
+
+# ===== OS =====
+# Windows
+Thumbs.db
+ehthumbs.db
+ehthumbs_view.db
+desktop.ini
+$RECYCLE.BIN/
+# macOS
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+
+# ===== Editors / IDEs =====
+.vscode/
+.idea/
+.vs/
+*.swp
+*.swo
+*~
+.#*
+#*#
+*.sublime-project
+.sublime-workspace
+
+# ===== Logs =====
+*.log.*
+logs/
+
+# ===== Env / Secrets =====
+.env.local
+.env.*.local
+*.key
+*.p12
+.pfx
+secrets/
+
+# ===== Caches (language-agnostic) =====
+.cache/
+.parcel-cache/
+.sass-cache/
+.eslintcache
+.stylelintcache
+.prettiercache
+
+# ===== Coverage / Reports =====
+coverage/
+.coverage
+*.lcov
+
+# ===== Temp / Backup / Crash dumps =====
+tmp/
+temp/
+*.tmp
+*.bak
+*.backup
+*.orig
+*.rej
+*.stackdump
+*.dmp
+core
+core.*
+
+# ===== Build artifacts =====
+dist/
+build/
+out/
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.venv/
+venv/
+env/
+ENV/
+htmlcov/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ===== Node =====
+pnpm-debug.log*
+lerna-debug.log*
+.npm/
+.pnpm-store/
+.nyc_output/
+lib-cov/
+jspm_packages/
+bower_components/
+
