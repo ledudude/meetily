@@ -276,15 +276,133 @@ jobs:
           echo "## Build Artifacts"
           find target/x86_64-pc-windows-msvc/${{ steps.build-profile.outputs.profile }}/bundle -type f \( -name "*.msi" -o -name "*.exe" \) -exec ls -lh {} \;
 
-      - name: Upload artifacts
+      - name: Prepare portable package and standalone exe (Windows)
+        if: ${{ github.event_name == 'push' || github.event.inputs.upload-artifacts == 'true' }}
+        id: portable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $profile = "${{ steps.build-profile.outputs.profile }}"
+          $ver     = "${{ steps.get-version.outputs.version }}"
+          $target  = "x86_64-pc-windows-msvc"
+
+          $releaseDir = "target/$target/$profile"
+          $mainExeSrc = Join-Path $releaseDir "meetily.exe"
+          if (!(Test-Path $mainExeSrc)) { throw "meetily.exe not found at $mainExeSrc" }
+
+          $portableName = "meetily_v${ver}_x64_portable"
+          $portableDir  = Join-Path (Resolve-Path "target").Path "portable-build\$portableName"
+          $outDir       = (New-Item -ItemType Directory -Force -Path "target/portable-out").FullName
+          if (Test-Path $portableDir) { Remove-Item -Recurse -Force $portableDir }
+          New-Item -ItemType Directory -Force -Path $portableDir | Out-Null
+
+          # 1) main executable
+          Copy-Item -Force $mainExeSrc -Destination (Join-Path $portableDir "meetily.exe")
+
+          # 2) sidecars: Tauri strips the <target-triple> suffix when bundling
+          $sidecars = @(
+            @{ Src = "frontend/src-tauri/binaries/llama-helper-$target.exe"; Dst = "llama-helper.exe" },
+            @{ Src = "frontend/src-tauri/binaries/ffmpeg-$target.exe";       Dst = "ffmpeg.exe" }
+          )
+          foreach ($s in $sidecars) {
+            if (Test-Path $s.Src) {
+              Copy-Item -Force $s.Src -Destination (Join-Path $portableDir $s.Dst)
+              Write-Host "  + sidecar: $($s.Dst)"
+            } else {
+              throw "Required sidecar missing: $($s.Src)"
+            }
+          }
+
+          # 3) bundled resources declared in tauri.conf.json -> "bundle.resources": ["templates/*.json"]
+          $templatesSrc = "frontend/src-tauri/templates"
+          if (Test-Path $templatesSrc) {
+            $templatesDst = New-Item -ItemType Directory -Force -Path (Join-Path $portableDir "templates")
+            Get-ChildItem $templatesSrc -Filter "*.json" -File | ForEach-Object {
+              Copy-Item -Force $_.FullName -Destination $templatesDst.FullName
+              Write-Host "  + resource: templates/$($_.Name)"
+            }
+          } else {
+            Write-Warning "templates dir not found at $templatesSrc"
+          }
+
+          # 4) Vulkan runtime DLL (optional; matches CI bundling location)
+          $vulkanDll = "frontend/src-tauri/vulkan-runtime/vulkan-1.dll"
+          if (Test-Path $vulkanDll) {
+            Copy-Item -Force $vulkanDll -Destination (Join-Path $portableDir "vulkan-1.dll")
+            Write-Host "  + runtime: vulkan-1.dll"
+          } else {
+            Write-Warning "vulkan-1.dll not found; portable will rely on system-installed Vulkan runtime"
+          }
+
+          # 5) portable marker
+          $portableTxt = @(
+            "Meetily Portable Build",
+            "Version : $ver",
+            "Target  : $target",
+            "Profile : $profile",
+            "Built   : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz')",
+            "",
+            "This is the portable distribution. Do not install; extract the zip and run meetily.exe directly.",
+            "The presence of this file signals portable mode to the application."
+          ) -join "`r`n"
+          Set-Content -Path (Join-Path $portableDir "portable.txt") -Value $portableTxt -Encoding ascii
+
+          Write-Host ""
+          Write-Host "Portable staging contents:"
+          Get-ChildItem -Recurse $portableDir | ForEach-Object { Write-Host "  $($_.FullName.Substring($portableDir.Length + 1))" }
+
+          # 6) zip
+          $zipPath = Join-Path $outDir "$portableName.zip"
+          if (Test-Path $zipPath) { Remove-Item -Force $zipPath }
+          Compress-Archive -Path (Join-Path $portableDir "*") -DestinationPath $zipPath -Force
+          Write-Host "Created portable zip: $zipPath"
+
+          # 7) standalone meetily.exe (keep original file name)
+          Copy-Item -Force $mainExeSrc -Destination (Join-Path $outDir "meetily.exe")
+
+          Write-Host ""
+          Write-Host "Portable output directory:"
+          Get-ChildItem $outDir | Format-Table Name, Length -AutoSize
+
+          "portable_zip=$zipPath"                             | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "portable_name=$portableName"                       | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "standalone_exe=$(Join-Path $outDir 'meetily.exe')" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Upload MSI artifact
         if: ${{ github.event_name == 'push' || github.event.inputs.upload-artifacts == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: meetily-windows-x64-${{ steps.build-profile.outputs.profile }}-${{ steps.get-version.outputs.version }}
-          path: |
-            target/x86_64-pc-windows-msvc/${{ steps.build-profile.outputs.profile }}/bundle/msi/*.msi
-            target/x86_64-pc-windows-msvc/${{ steps.build-profile.outputs.profile }}/bundle/nsis/*.exe
+          name: meetily-windows-x64-msi-${{ steps.build-profile.outputs.profile }}-${{ steps.get-version.outputs.version }}
+          path: target/x86_64-pc-windows-msvc/${{ steps.build-profile.outputs.profile }}/bundle/msi/*.msi
           retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload NSIS installer artifact
+        if: ${{ github.event_name == 'push' || github.event.inputs.upload-artifacts == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: meetily-windows-x64-nsis-${{ steps.build-profile.outputs.profile }}-${{ steps.get-version.outputs.version }}
+          path: target/x86_64-pc-windows-msvc/${{ steps.build-profile.outputs.profile }}/bundle/nsis/*.exe
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload standalone meetily.exe artifact
+        if: ${{ github.event_name == 'push' || github.event.inputs.upload-artifacts == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: meetily-windows-x64-exe-${{ steps.build-profile.outputs.profile }}-${{ steps.get-version.outputs.version }}
+          path: target/portable-out/meetily.exe
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload portable zip artifact
+        if: ${{ github.event_name == 'push' || github.event.inputs.upload-artifacts == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: meetily-windows-x64-portable-${{ steps.build-profile.outputs.profile }}-${{ steps.get-version.outputs.version }}
+          path: target/portable-out/*.zip
+          retention-days: 30
+          if-no-files-found: error
 
       - name: Generate build summary
         shell: bash
