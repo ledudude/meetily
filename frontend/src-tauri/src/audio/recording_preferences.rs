@@ -103,8 +103,9 @@ pub fn generate_recording_filename(format: &str) -> String {
 pub async fn load_recording_preferences<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<RecordingPreferences> {
-    // Try to load from Tauri store
-    let store = match app.store("recording_preferences.json") {
+    // Try to load from Tauri store (portable-aware path)
+    let store_path = crate::paths::store_path(app, "recording_preferences.json");
+    let store = match app.store(store_path) {
         Ok(store) => store,
         Err(e) => {
             warn!("Failed to access store: {}, using defaults", e);
@@ -150,9 +151,10 @@ pub async fn save_recording_preferences<R: Runtime>(
           preferences.save_folder, preferences.auto_save, preferences.file_format,
           preferences.preferred_mic_device, preferences.preferred_system_device);
 
-    // Get or create store
+    // Get or create store (portable-aware path)
+    let store_path = crate::paths::store_path(app, "recording_preferences.json");
     let store = app
-        .store("recording_preferences.json")
+        .store(store_path)
         .map_err(|e| anyhow::anyhow!("Failed to access store: {}", e))?;
 
     // Serialize preferences to JSON value

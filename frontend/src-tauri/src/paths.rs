@@ -85,3 +85,19 @@ pub fn recordings_dir<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
     }
     dir
 }
+
+/// Compute the on-disk path for a tauri-plugin-store JSON file.
+///
+/// * Portable mode -> `<data_dir>/<name>` (absolute, kept alongside the DB).
+/// * Otherwise     -> the plain `name` (the plugin resolves it to its default
+///                    per-user location, preserving the existing behaviour).
+///
+/// Using this helper keeps the plugin's default path logic intact for regular
+/// installs while making portable builds fully self-contained.
+pub fn store_path<R: Runtime>(app: &AppHandle<R>, name: &str) -> std::path::PathBuf {
+    if is_portable() {
+        data_dir(app).join(name)
+    } else {
+        std::path::PathBuf::from(name)
+    }
+}
